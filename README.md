@@ -32,7 +32,7 @@ Como ainda estou estruturando a base da arquitetura, existem algumas escolhas t�
 2. **Uso do ONNX nos Workers:** Para rodar vários containers de *worker* na mesma máquina de teste sem estourar a memória RAM, pensei em exportar o modelo de visão computacional para o formato **ONNX** (usando `onnxruntime`) em vez de subir o PyTorch completo em cada container. Ainda preciso testar se isso complica a etapa de pós-processamento das coordenadas geográficas.
 3. **Integração com API do Google Earth / Autenticação:** No desenho inicial, pensei em buscar os arquivos `.tif` direto da API do Google Earth Engine e colocar login com conta Google. Porém, dependendo do tempo disponível, estou considerando deixar essa integração externa como opcional e focar primeiro no upload direto de arquivos `.tif` locais para priorizar os requisitos de sistemas distribuídos (concorrência, tolerância a falhas e comunicação entre os nós).
 
-## Estrutura de Pastas
+## Estrutura de Pastas (objetivo final)
 - geo-observer
   - api
     - app: API FastAPI e ingestão.
