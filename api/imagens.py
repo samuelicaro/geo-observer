@@ -6,10 +6,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from api.database import session
 from api.storage import storage, bucket
-from models.models import Imagem
+from models.models import Imagem, Processamento
 from api.schemas import ImagemLeitura
 from fastapi.responses import Response
 from api.previas import gerar_previa
@@ -30,6 +31,30 @@ def obter(imagem_id: int, db: Session = Depends(session)):
     if item is None:
         raise HTTPException(404, "Imagem não encontrada")
     return serialize(item)
+
+@router.delete("/{imagem_id}", response_model=ImagemLeitura)
+def remover(imagem_id: int, db: Session = Depends(session)):
+    item = db.get(Imagem, imagem_id)
+    if item is None:
+        raise HTTPException(404, "Imagem não encontrada")
+
+    vinculo = db.scalar(
+        select(Processamento.id).where(Processamento.imagem_id == imagem_id).limit(1)
+    )
+    if vinculo is not None:
+        raise HTTPException(409, "A imagem possui processamentos vinculados e não pode ser removida.")
+
+    resposta = ImagemLeitura.model_validate(item)
+    try:
+        db.delete(item)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        # Também cobre um processamento criado entre a consulta e a exclusão.
+        if getattr(exc.orig, "sqlstate", None) in {"23502", "23503"}:
+            raise HTTPException(409, "A imagem possui registros vinculados e não pode ser removida.") from None
+        raise
+    return resposta
 
 def persistir(file, nome, size, db):
     client, target, key = storage(), bucket(), f"originais/{uuid4()}.tif"
@@ -75,4 +100,3 @@ def previa(imagem_id: int, db: Session = Depends(session)):
     if item is None:
         raise HTTPException(404, 'Imagem não encontrada')
     return Response(gerar_previa(item), media_type='image/png', headers={'Cache-Control': 'private, max-age=3600'})
-
