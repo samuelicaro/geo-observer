@@ -11,5 +11,20 @@
     <input type="hidden" name="MAX_FILE_SIZE" value="314572800">
     <input type="file" id="arquivo_tif" name="arquivo_tif"/>
 
+    <button type="button" id="enviar_tif">Enviar arquivo</button>
+    <h2>Arquivos adicionados</h2>
+    <button type="button" id="atualizar_imagens">Atualizar lista</button>
+    <p id="status_imagens" role="status" aria-live="polite"></p>
+    <ul id="lista_imagens"></ul>
+    <button type="button" id="mais_imagens" hidden>Carregar mais</button>
+
+    <section id="visualizacao" hidden>
+        <h2 id="titulo_previa">Visualização</h2>
+        <p id="status_previa" role="status" aria-live="polite"></p>
+        <img id="imagem_previa" alt="Prévia do arquivo selecionado" style="max-width:100%; height:auto" hidden/>
+        <p>Prévia reduzida, sem análise. Para imagens multibanda, as cores podem ser aproximadas.</p>
+    </section>
+    <script src="/static/upload.js" defer></script>
 </body>
 </html>
+

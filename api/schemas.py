@@ -1,7 +1,7 @@
 """Contratos HTTP. Geometrias PostGIS não são expostas como WKB no JSON."""
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
 class Leitura(BaseModel):
@@ -55,3 +55,16 @@ class PoligonoLeitura(Leitura):
     tarefa_id: int
     classe: str
     confianca: float = Field(ge=0, le=1)
+
+
+class UsuarioCriacao(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    nome: str = Field(min_length=1, max_length=100)
+    email: str = Field(max_length=254, pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+    senha: SecretStr = Field(min_length=12, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def normalizar_email(cls, value: str) -> str:
+        return value.lower()
+

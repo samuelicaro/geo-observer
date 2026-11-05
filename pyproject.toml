@@ -16,10 +16,14 @@ dependencies = [
     "geoalchemy2 (>=0.18,<1)",
     "psycopg[binary] (>=3.2,<4)",
     "minio (>=7.2,<8)",
-    "python-dotenv (>=1,<2)"
+    "python-dotenv (>=1,<2)",
+    "rasterio (>=1.5,<2)",
+    "pillow (>=12,<14)",
+    "numpy (>=2,<3)"
 ]
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
+

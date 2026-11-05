@@ -11,6 +11,8 @@ from api.database import session
 from api.storage import storage, bucket
 from models.models import Imagem
 from api.schemas import ImagemLeitura
+from fastapi.responses import Response
+from api.previas import gerar_previa
 
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 logger = logging.getLogger(__name__)
@@ -66,3 +68,11 @@ async def enviar(request: Request, nome: str = Query(..., min_length=1, max_leng
             raise HTTPException(415, "Cabeçalho TIFF inválido")
         file.seek(0)
         return await run_in_threadpool(persistir, file, nome, size, db)
+
+@router.get('/{imagem_id}/previa', response_class=Response, responses={200: {'content': {'image/png': {}}}})
+def previa(imagem_id: int, db: Session = Depends(session)):
+    item = db.get(Imagem, imagem_id)
+    if item is None:
+        raise HTTPException(404, 'Imagem não encontrada')
+    return Response(gerar_previa(item), media_type='image/png', headers={'Cache-Control': 'private, max-age=3600'})
+
