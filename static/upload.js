@@ -40,7 +40,7 @@ enviar.addEventListener('click', async () => {
     } finally {
         arquivo.disabled = false;
         enviar.disabled = false;
-        enviar.textContent = 'Enviar arquivo';
+        enviar.textContent = 'Enviar';
         arquivo.value = '';
     }
 });
@@ -81,7 +81,19 @@ async function carregarImagens(reiniciar = false) {
             visualizar.type = 'button';
             visualizar.textContent = 'Visualizar';
             visualizar.addEventListener('click', () => visualizarImagem(imagem));
-            item.append(' ', visualizar);
+            const processar = document.createElement('button');
+            processar.type = 'button';
+            processar.textContent = 'Recortar';
+            processar.addEventListener('click', async () => {
+                processar.disabled = true;
+                try {
+                    const novo = await requisitar('/processamentos/', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({imagem_id: imagem.id})});
+                    await requisitar(`/processamentos/${novo.id}/planejar`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tamanho_tile: 512})});
+                    await atualizarProcessamentos();
+                } catch (error) { alert(error.message); }
+                finally { processar.disabled = false; }
+            });
+            item.append(' ', visualizar, ' ', processar);
             listaImagens.appendChild(item);
         }
         offsetImagens = offset + Math.min(imagens.length, 50);
@@ -141,3 +153,60 @@ async function visualizarImagem(imagem) {
         if (error.name !== 'AbortError') status.textContent = error.message;
     }
 }
+
+
+async function requisitar(url, options) {
+    const response = await fetch(url, options);
+    const data = await response.json();
+    if (!response.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'Não foi possível executar a operação.');
+    return data;
+}
+let consultandoProcessamentos = false;
+async function atualizarProcessamentos() {
+    if (consultandoProcessamentos) return;
+    consultandoProcessamentos = true;
+    const lista = document.getElementById('lista_processamentos');
+    try {
+        const processos = await requisitar('/processamentos/?limit=100');
+        const fragment = document.createDocumentFragment();
+        for (const processo of processos) {
+            const progresso = await requisitar(`/processamentos/${processo.id}/progresso`);
+            const item = document.createElement('li');
+            const estados = {aguardando_planejamento: "não iniciado", pendente: "na fila", processando: "em andamento", concluido: "concluído", falhou: "com erro"};
+            item.textContent = `#${processo.id} / imagem ${processo.imagem_id} — ${estados[progresso.status] || progresso.status} — ${progresso.concluidas} de ${progresso.total} partes (${progresso.percentual}%)${progresso.falhas ? `, ${progresso.falhas} com erro` : ""}`;
+            if (processo.status === 'aguardando_planejamento') {
+                const planejar = document.createElement('button');
+                planejar.textContent = 'Iniciar';
+                planejar.type = 'button';
+                planejar.onclick = async () => {
+                    planejar.disabled = true;
+                    try {
+                        await requisitar(`/processamentos/${processo.id}/planejar`, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({tamanho_tile:512})});
+                        await atualizarProcessamentos();
+                    } catch (error) { alert(error.message); }
+                    finally { planejar.disabled = false; }
+                };
+                item.append(' ', planejar);
+            }
+            fragment.appendChild(item);
+        }
+        lista.replaceChildren(fragment);
+        document.getElementById('status_processamentos').textContent = processos.length ? 'Até 100 registros. Atualiza a cada 5 segundos.' : 'Nenhum recorte iniciado.';
+    } catch {
+        document.getElementById('status_processamentos').textContent = 'Não foi possível consultar o progresso. Tentaremos novamente.';
+    } finally { consultandoProcessamentos = false; }
+}
+atualizarProcessamentos();
+setInterval(() => { if (!document.hidden) atualizarProcessamentos(); }, 5000);
+
+
+document.getElementById('fechar_previa').addEventListener('click', () => {
+    pedidoPrevia?.abort();
+    const img = document.getElementById('imagem_previa');
+    img.onload = null;
+    img.onerror = null;
+    img.removeAttribute('src');
+    if (urlPrevia) URL.revokeObjectURL(urlPrevia);
+    urlPrevia = null;
+    document.getElementById('visualizacao').hidden = true;
+});

@@ -1,30 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8"/>
-    <title>Pagina Inicial</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <title>Geo Observer</title>
+    <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 24px; max-width: 1000px; }
+        h1 { font-size: 26px; }
+        h2 { font-size: 19px; margin-top: 28px; }
+        button, input { font: inherit; }
+        button { margin: 3px; cursor: pointer; }
+        button:disabled { cursor: wait; }
+        li { margin-bottom: 10px; overflow-wrap: anywhere; }
+        #imagem_previa { max-width: 100%; height: auto; }
+        #status_imagens, #status_processamentos, #status_previa { font-size: 14px; }
+        hr { border: 0; border-top: 1px solid #aaa; margin: 24px 0; }
+    </style>
 </head>
 <body>
-    <h1>GeoObserver v1</h1>
-
-    <label for="arquivo_tif">Escolha seu arquivo .tif (resolução de 50cm apenas)</label>
+    <h1>Geo Observer</h1>
+    <p>Sistemas Distribuídos — upload e recorte de imagens</p>
+    <p><a href="/docs">API / Swagger</a></p>
+    <hr/>
+    <h2>Escolher no mapa</h2>
+    <p>Aproxime o mapa e clique em Selecionar área. Depois marque dois cantos do retângulo.</p>
+    <div id="mapa" style="height:420px; border:1px solid #aaa" aria-label="Mapa de seleção de área"></div>
+    <button id="selecionar_area" type="button">Selecionar área</button>
+    <button id="limpar_area" type="button">Limpar</button>
+    <fieldset>
+        <legend>Áreas para futura predição</legend>
+        <p>Clique em Desenhar, marque os vértices no mapa e conclua. Depois use Salvar no servidor para guardar a área. Vincule uma imagem pelo ID exibido na lista de arquivos. Ainda não há predição.</p>
+        <button id="desenhar_poligono" type="button">Desenhar polígono</button>
+        <button id="desfazer_vertice" type="button" disabled>Desfazer ponto</button>
+        <button id="concluir_poligono" type="button" disabled>Concluir</button>
+        <button id="cancelar_poligono" type="button" disabled>Cancelar desenho</button>
+        <button id="atualizar_areas" type="button">Atualizar áreas do servidor</button>
+        <button id="exportar_poligonos" type="button" disabled>Baixar GeoJSON</button>
+        <p id="status_poligonos" role="status" aria-live="polite"></p>
+        <ul id="lista_poligonos"></ul>
+    </fieldset>
+    <p id="area_mapa">Nenhuma área selecionada.</p>
+    <p>
+        <label>De <input type="date" id="data_inicio"/></label>
+        <label>até <input type="date" id="data_fim"/></label>
+        <label>Nuvens na cena até <input type="number" id="nuvens" value="30" min="0" max="100" style="width:60px"/>%</label>
+        <button id="buscar_cenas" type="button">Buscar cenas</button>
+    </p>
+    <p id="status_mapa" role="status" aria-live="polite"></p>
+    <ul id="cenas_mapa"></ul>
+    <button id="importar_cena" type="button" disabled>Adicionar cena aos arquivos</button>
+    <p>O mapa de ruas é só uma referência. A cena Sentinel-2 escolhida aparece por cima dele, com resolução de 10 m.</p>
+    <hr/>
+    <h2>Ou enviar seu arquivo</h2>
+    <label for="arquivo_tif">GeoTIFF (.tif ou .tiff):</label>
     <input type="hidden" name="MAX_FILE_SIZE" value="314572800">
-    <input type="file" id="arquivo_tif" name="arquivo_tif"/>
+    <input type="file" id="arquivo_tif" name="arquivo_tif" accept=".tif,.tiff"/>
+    <button type="button" id="enviar_tif">Enviar</button>
+    <p>Até 300 MB. O arquivo precisa ter coordenadas.</p>
 
-    <button type="button" id="enviar_tif">Enviar arquivo</button>
-    <h2>Arquivos adicionados</h2>
-    <button type="button" id="atualizar_imagens">Atualizar lista</button>
+    <h2>Arquivos</h2>
+    <button type="button" id="atualizar_imagens">Atualizar</button>
     <p id="status_imagens" role="status" aria-live="polite"></p>
     <ul id="lista_imagens"></ul>
-    <button type="button" id="mais_imagens" hidden>Carregar mais</button>
+    <button type="button" id="mais_imagens" hidden>Ver mais</button>
 
     <section id="visualizacao" hidden>
-        <h2 id="titulo_previa">Visualização</h2>
+        <hr/>
+        <h2 id="titulo_previa">Imagem</h2>
+        <button type="button" id="fechar_previa">Fechar imagem</button>
         <p id="status_previa" role="status" aria-live="polite"></p>
-        <img id="imagem_previa" alt="Prévia do arquivo selecionado" style="max-width:100%; height:auto" hidden/>
-        <p>Prévia reduzida, sem análise. Para imagens multibanda, as cores podem ser aproximadas.</p>
+        <img id="imagem_previa" alt="Imagem selecionada" hidden/>
+        <p>Prévia reduzida. As cores podem variar conforme as bandas do TIFF.</p>
     </section>
+    <hr/>
+    <h2>Recortes</h2>
+    <p>O processamento atual só divide a imagem em partes. Ainda não faz detecção.</p>
+    <p id="status_processamentos" role="status"></p>
+    <ul id="lista_processamentos"></ul>
     <script src="/static/upload.js" defer></script>
+    <script src="/static/vendor/leaflet/leaflet.js" defer></script>
+    <script src="/static/poligonos.js" defer></script>
+    <script src="/static/mapa.js" defer></script>
 </body>
 </html>
 

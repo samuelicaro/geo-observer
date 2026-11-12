@@ -1,5 +1,6 @@
 """Contratos HTTP. Geometrias PostGIS não são expostas como WKB no JSON."""
 from datetime import datetime
+from uuid import UUID
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
@@ -68,3 +69,44 @@ class UsuarioCriacao(BaseModel):
     def normalizar_email(cls, value: str) -> str:
         return value.lower()
 
+
+class PlanejamentoCriacao(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    tamanho_tile: int = Field(default=512, ge=64, le=1024)
+
+
+class GeometriaArea(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    type: Literal["Polygon"] = "Polygon"
+    coordinates: list[list[tuple[float, float]]] = Field(min_length=1, max_length=1)
+
+    @field_validator("coordinates")
+    @classmethod
+    def validar_anel(cls, rings):
+        ring = rings[0]
+        if not 4 <= len(ring) <= 201 or ring[0] != ring[-1]:
+            raise ValueError("Envie um anel fechado com 3 a 200 vértices.")
+        if len(set(ring[:-1])) != len(ring)-1:
+            raise ValueError("O polígono possui vértices repetidos.")
+        for lon, lat in ring:
+            if not -180 <= lon <= 180 or not -85 <= lat <= 85:
+                raise ValueError("Coordenadas fora dos limites do mapa.")
+        if any(abs(a[0]-b[0]) > 180 for a,b in zip(ring,ring[1:])):
+            raise ValueError("Não cruze o antimeridiano.")
+        return rings
+
+
+class AreaCriacao(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    id: UUID
+    nome: str = Field(min_length=1, max_length=100)
+    imagem_id: int | None = Field(default=None, gt=0)
+    geometria: GeometriaArea
+
+
+class AreaLeitura(BaseModel):
+    id: str
+    nome: str
+    imagem_id: int | None
+    geometria: GeometriaArea
+    criado_em: datetime

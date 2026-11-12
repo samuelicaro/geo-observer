@@ -16,4 +16,6 @@ def session():
         yield db
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv()
     Base.metadata.create_all(engine())

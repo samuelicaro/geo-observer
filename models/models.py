@@ -91,3 +91,24 @@ class Poligono(Base):
     confianca: Mapped[float] = mapped_column(Float)
     geometria: Mapped[WKBElement] = mapped_column(Geometry("POLYGON", srid=4326))
     tarefa: Mapped["Tarefa"] = relationship(back_populates="poligonos")
+
+class EnvioTarefa(Base):
+    """Registro de publicação criado na mesma transação que a tarefa."""
+    __tablename__ = "envios_tarefas"
+    tarefa_id: Mapped[int] = mapped_column(ForeignKey("tarefas.id"), primary_key=True)
+    publicado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+class OrigemImagem(Base):
+    __tablename__ = "origens_imagens"
+    imagem_id: Mapped[int] = mapped_column(ForeignKey("imagens.id", ondelete="CASCADE"), primary_key=True)
+    dados: Mapped[dict] = mapped_column(JSONB)
+
+
+class AreaInteresse(Base):
+    """Área escolhida pelo usuário; distinta dos resultados em Poligono."""
+    __tablename__ = "areas_interesse"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    nome: Mapped[str] = mapped_column(String(100))
+    imagem_id: Mapped[int | None] = mapped_column(ForeignKey("imagens.id", ondelete="RESTRICT"), index=True)
+    geometria: Mapped[WKBElement] = mapped_column(Geometry("POLYGON", srid=4326))
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)

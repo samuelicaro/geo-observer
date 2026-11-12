@@ -10,10 +10,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from api.database import session
 from api.storage import storage, bucket
-from models.models import Imagem, Processamento
+from models.models import Imagem, Processamento, OrigemImagem
 from api.schemas import ImagemLeitura
 from fastapi.responses import Response
 from api.previas import gerar_previa
+from api.raster import metadados
 
 router = APIRouter(prefix="/imagens", tags=["Imagens"])
 logger = logging.getLogger(__name__)
@@ -51,18 +52,22 @@ def remover(imagem_id: int, db: Session = Depends(session)):
     except IntegrityError as exc:
         db.rollback()
         # Também cobre um processamento criado entre a consulta e a exclusão.
-        if getattr(exc.orig, "sqlstate", None) in {"23502", "23503"}:
+        if getattr(exc.orig, "sqlstate", None) in {"23001", "23502", "23503"}:
             raise HTTPException(409, "A imagem possui registros vinculados e não pode ser removida.") from None
         raise
     return resposta
 
-def persistir(file, nome, size, db):
+def persistir(file, nome, size, db, origem=None):
+    dados = metadados(file)
+    file.seek(0)
     client, target, key = storage(), bucket(), f"originais/{uuid4()}.tif"
     client.put_object(target, key, file, size, content_type="image/tiff")
-    item = Imagem(nome_original=nome, bucket=target, objeto_chave=key, tamanho_bytes=size)
+    item = Imagem(nome_original=nome, bucket=target, objeto_chave=key, tamanho_bytes=size, **dados)
     try:
         db.add(item)
         db.flush()
+        if origem is not None:
+            db.add(OrigemImagem(imagem_id=item.id, dados=origem))
         result = serialize(item)
         db.commit()
         return result
@@ -100,3 +105,11 @@ def previa(imagem_id: int, db: Session = Depends(session)):
     if item is None:
         raise HTTPException(404, 'Imagem não encontrada')
     return Response(gerar_previa(item), media_type='image/png', headers={'Cache-Control': 'private, max-age=3600'})
+
+
+@router.get('/{imagem_id}/origem')
+def origem(imagem_id: int, db: Session = Depends(session)):
+    if db.get(Imagem, imagem_id) is None:
+        raise HTTPException(404, 'Imagem não encontrada')
+    row = db.get(OrigemImagem, imagem_id)
+    return row.dados if row else {'provedor': 'upload local ou registro anterior'}
