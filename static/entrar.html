@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#f2f4f2">
+    <title>Entrar — Geo Observer</title>
+    <style>
+        :root { color-scheme:light; --fundo:#f2f4f2; --papel:#fff; --texto:#252b27; --suave:#68726b; --borda:#d8ded9; --verde:#466550; --verde-escuro:#35513d; }
+        * { box-sizing:border-box; }
+        body { min-height:100vh; min-height:100svh; display:grid; place-items:center; margin:0; padding:24px 14px; background:var(--fundo); color:var(--texto); font:15px/1.45 Arial,sans-serif; }
+        .cartao { width:min(100%,420px); padding:32px; border:1px solid var(--borda); border-radius:10px; background:var(--papel); box-shadow:0 12px 36px #20302412; }
+        .marca { display:flex; align-items:center; gap:9px; margin-bottom:24px; color:var(--verde-escuro); font-size:16px; font-weight:700; text-decoration:none; }
+        .marca svg { width:25px; height:25px; }
+        h1 { margin:0; font-size:24px; letter-spacing:-.4px; }
+        .intro { margin:6px 0 22px; color:var(--suave); }
+        #acesso_google[hidden], #separador_google[hidden] { display:none; }
+        #acesso_google { display:grid; gap:10px; }
+        #preparar_google { display:flex; width:100%; min-height:44px; align-items:center; justify-content:center; gap:10px; padding:8px 14px; border:1px solid #c8cfca; border-radius:5px; background:#fff; color:#30342f; font:600 14px Arial,sans-serif; cursor:pointer; }
+        #preparar_google:hover:not(:disabled) { background:#f8faf8; border-color:#9ca89f; }
+        #preparar_google:disabled { cursor:wait; opacity:.6; }
+        #preparar_google svg { width:19px; height:19px; flex:none; }
+        #botao_google { display:flex; justify-content:center; }
+        #status_google:empty { display:none; }
+        #status_google { margin:0; color:var(--suave); text-align:center; font-size:13px; }
+        .separador { display:flex; align-items:center; gap:12px; margin:20px 0; color:#879089; font-size:12px; }
+        .separador::before,.separador::after { height:1px; flex:1; background:#e4e8e5; content:""; }
+        #conta { display:grid; gap:13px; }
+        #conta label { display:grid; gap:5px; color:#454d47; font-size:13px; font-weight:600; }
+        #conta input { width:100%; min-height:42px; padding:9px 11px; border:1px solid #cbd2cc; border-radius:5px; background:#fff; color:var(--texto); font:15px Arial,sans-serif; }
+        #conta input:focus { outline:2px solid #46655044; border-color:var(--verde); }
+        .acoes { display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:3px; }
+        .acoes button { min-height:42px; padding:8px 12px; border:1px solid var(--borda); border-radius:5px; background:#fff; color:var(--texto); font:600 14px Arial,sans-serif; cursor:pointer; }
+        .acoes button:hover:not(:disabled) { background:#f6f8f6; }
+        .acoes button[type=submit][value=entrar] { border-color:var(--verde); background:var(--verde); color:#fff; }
+        .acoes button[type=submit][value=entrar]:hover:not(:disabled) { background:var(--verde-escuro); }
+        .acoes button:disabled { cursor:wait; opacity:.6; }
+        .nota { margin:0; color:var(--suave); font-size:12px; }
+        #status { min-height:1.3em; margin:14px 0 0; color:var(--suave); text-align:center; font-size:13px; }
+        @media(max-width:440px) { .cartao { padding:24px 20px; } }
+    </style>
+</head>
+<body>
+    <main class="cartao">
+        <a class="marca" href="/" aria-label="Geo Observer — página inicial">
+            <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M16 29s10-9.1 10-17A10 10 0 0 0 6 12c0 7.9 10 17 10 17Z" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="12" r="3.5" stroke="currentColor" stroke-width="2"/><path d="m9 23 5-3 4 2 5-3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Geo Observer
+        </a>
+        <h1>Acesse sua conta</h1>
+        <p class="intro">Entre para acessar suas imagens e áreas.</p>
+
+        <section id="acesso_google" hidden aria-label="Acesso com Google">
+            <button type="button" id="preparar_google">
+                <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M43.6 24.5c0-1.4-.1-2.8-.4-4.1H24v7.8h11a9.4 9.4 0 0 1-4.1 6.2l6.4 5C41 35.8 43.6 30.7 43.6 24.5Z"/><path fill="#34A853" d="M24 44c5.5 0 10.1-1.8 13.4-4.9l-6.4-5c-1.8 1.2-4.1 2-7 2-5.4 0-10-3.7-11.7-8.6l-6.6 5.1C9 39.4 16 44 24 44Z"/><path fill="#FBBC05" d="M12.3 27.5a12 12 0 0 1 0-7l-6.6-5.1a20 20 0 0 0 0 17.2l6.6-5.1Z"/><path fill="#EA4335" d="M24 11.9c3 0 5.7 1 7.8 3.1l5.8-5.8C34.1 6 29.5 4 24 4 16 4 9 8.6 5.7 15.4l6.6 5.1c1.7-4.9 6.3-8.6 11.7-8.6Z"/></svg>
+                <span>Entrar com Google</span>
+            </button>
+            <div id="botao_google"></div>
+            <p id="status_google" role="status" aria-live="polite"></p>
+        </section>
+
+        <div id="separador_google" class="separador" hidden>ou entre com e-mail</div>
+
+        <form id="conta">
+            <label>Nome <input name="nome" maxlength="100" autocomplete="name" placeholder="Usado ao criar uma conta"></label>
+            <label>E-mail <input name="email" type="email" required maxlength="254" autocomplete="username" placeholder="voce@exemplo.com"></label>
+            <label>Senha <input name="senha" type="password" required maxlength="128" autocomplete="current-password" placeholder="Sua senha"></label>
+            <div class="acoes">
+                <button type="submit" value="entrar">Entrar</button>
+                <button type="submit" value="cadastrar">Criar conta</button>
+            </div>
+            <p class="nota">Para criar uma conta, use uma senha com pelo menos 12 caracteres.</p>
+        </form>
+        <p id="status" role="status" aria-live="polite"></p>
+    </main>
+    <script src="/static/auth.js" defer></script>
+    <script src="/static/google-login.js" defer></script>
+</body>
+</html>

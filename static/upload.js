@@ -93,7 +93,38 @@ async function carregarImagens(reiniciar = false) {
                 } catch (error) { alert(error.message); }
                 finally { processar.disabled = false; }
             });
-            item.append(' ', visualizar, ' ', processar);
+            const renomear = document.createElement('button');
+            renomear.type = 'button';
+            renomear.textContent = 'Renomear';
+            renomear.addEventListener('click', async () => {
+                const nome = prompt('Novo nome do arquivo (.tif ou .tiff):', imagem.nome_original);
+                if (nome === null) return;
+                if (!nome.trim()) { alert('Informe um nome para o arquivo.'); return; }
+                renomear.disabled = true;
+                try {
+                    await requisitar(`/imagens/${imagem.id}`, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({nome_original:nome.trim()})});
+                    await carregarImagens(true);
+                    statusImagens.textContent = 'Nome do arquivo atualizado.';
+                } catch (error) { alert(error.message); }
+                finally { renomear.disabled = false; }
+            });
+            const excluir = document.createElement('button');
+            excluir.type = 'button';
+            excluir.textContent = 'Excluir arquivo';
+            excluir.addEventListener('click', async () => {
+                if (!confirm(`Excluir o arquivo “${imagem.nome_original}”? Esta ação não pode ser desfeita.`)) return;
+                excluir.disabled = true;
+                try {
+                    await requisitar(`/imagens/${imagem.id}`, {method:'DELETE'});
+                    await carregarImagens(true);
+                    statusImagens.textContent = 'Arquivo excluído.';
+                } catch (error) { alert(error.message); }
+                finally { excluir.disabled = false; }
+            });
+            const localizar = document.createElement('button');
+            localizar.type = 'button'; localizar.textContent = 'Localizar no mapa';
+            localizar.onclick = () => document.dispatchEvent(new CustomEvent('localizar-imagem', {detail: imagem}));
+            item.append(' ', visualizar, ' ', localizar, ' ', processar, ' ', renomear, ' ', excluir);
             listaImagens.appendChild(item);
         }
         offsetImagens = offset + Math.min(imagens.length, 50);
@@ -174,6 +205,10 @@ async function atualizarProcessamentos() {
             const item = document.createElement('li');
             const estados = {aguardando_planejamento: "não iniciado", pendente: "na fila", processando: "em andamento", concluido: "concluído", falhou: "com erro"};
             item.textContent = `#${processo.id} / imagem ${processo.imagem_id} — ${estados[progresso.status] || progresso.status} — ${progresso.concluidas} de ${progresso.total} partes (${progresso.percentual}%)${progresso.falhas ? `, ${progresso.falhas} com erro` : ""}`;
+            const resultados=document.createElement('button');
+            resultados.textContent='Ver cobertura no mapa';
+            resultados.onclick=()=>document.dispatchEvent(new CustomEvent('mostrar-resultados',{detail:processo.id}));
+            item.append(' ',resultados);
             if (processo.status === 'aguardando_planejamento') {
                 const planejar = document.createElement('button');
                 planejar.textContent = 'Iniciar';
@@ -196,6 +231,7 @@ async function atualizarProcessamentos() {
         document.getElementById('status_processamentos').textContent = 'Não foi possível consultar o progresso. Tentaremos novamente.';
     } finally { consultandoProcessamentos = false; }
 }
+document.addEventListener('processamentos-alterados',atualizarProcessamentos);
 atualizarProcessamentos();
 setInterval(() => { if (!document.hidden) atualizarProcessamentos(); }, 5000);
 

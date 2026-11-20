@@ -21,7 +21,8 @@ function validarAnel(pontos) {
 function iniciarPoligonos(mapa, aoIniciar) {
     const el = id => document.getElementById(id);
     const mensagem=el('status_poligonos'), lista=el('lista_poligonos');
-    const chave='geo-observer.areas.v1';
+    const chave=`geo-observer.areas.usuario.${window.geoUsuarioId}.v1`;
+    let imagemSelecionada = null;
     let desenhando=false, pontos=[], registros=[], rascunho=null, zoomAnterior=true;
     const camadas=L.layerGroup().addTo(mapa);
     let carregando=false;
@@ -99,6 +100,10 @@ function iniciarPoligonos(mapa, aoIniciar) {
             };
             const ver=document.createElement('button'); ver.type='button'; ver.textContent='Ver no mapa';
             ver.onclick=()=>mapa.fitBounds(camada.getBounds());
+            const usarCenas=document.createElement('button'); usarCenas.type='button'; usarCenas.textContent='Usar para buscar cenas';
+            usarCenas.onclick=()=>{
+                document.dispatchEvent(new CustomEvent('area-cenas-selecionada',{detail:{geometry:feature.geometry,nome:nome.value.trim() || props.nome || `Área ${index+1}`}}));
+            };
             const excluir=document.createElement('button'); excluir.type='button'; excluir.textContent='Excluir';
             excluir.onclick=async()=>{
                 if (carregando) return;
@@ -109,7 +114,24 @@ function iniciarPoligonos(mapa, aoIniciar) {
                 } catch (error) { mensagem.textContent=`Não foi possível excluir: ${error.message}`; }
                 finally { carregando=false; excluir.disabled=false; guardar.disabled=false; }
             };
-            item.append(nome,imagem,guardar,ver,excluir); lista.appendChild(item);
+            const analisar=document.createElement('button');analisar.type='button';analisar.textContent='Analisar esta área';
+            analisar.disabled=!props.salvo || !props.imagem_id;
+            analisar.onclick=async()=>{
+                if(carregando)return;
+                if(nome.value.trim()!==props.nome || Number(imagem.value)!==props.imagem_id) {
+                    mensagem.textContent='Salve as alterações antes de iniciar a análise.';return;
+                }
+                carregando=true;analisar.disabled=true;
+                try {
+                    const process=await pedido('/processamentos/',{method:'POST',headers:{'Content-Type':'application/json'},
+                        body:JSON.stringify({imagem_id:props.imagem_id,area_id:props.id})});
+                    await pedido(`/processamentos/${process.id}/planejar`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tamanho_tile:512})});
+                    mensagem.textContent=`Processamento #${process.id} criado para esta área. Acompanhe na lista de análises.`;
+                    document.dispatchEvent(new Event('processamentos-alterados'));
+                } catch(error) {mensagem.textContent=`Falha: ${error.message}. Confira a lista de análises antes de repetir.`;}
+                finally {carregando=false;analisar.disabled=false;}
+            };
+            item.append(nome,imagem,guardar,ver,usarCenas,analisar,excluir); lista.appendChild(item);
         });
         el('exportar_poligonos').disabled=!registros.length;
     }
@@ -131,8 +153,8 @@ function iniciarPoligonos(mapa, aoIniciar) {
     el('concluir_poligono').onclick=()=>{
         const erro=validarAnel(pontos);
         if (erro) { mensagem.textContent=erro; return; }
-        registros.push({type:'Feature',properties:{tipo:'area_interesse',id:crypto.randomUUID(),salvo:false},geometry:{type:'Polygon',coordinates:[[...pontos,[...pontos[0]]]]}});
-        cancelar(); renderizar(); mensagem.textContent='Área criada. Ainda não há predição vinculada.'; salvar();
+        registros.push({type:'Feature',properties:{tipo:'area_interesse',id:crypto.randomUUID(),salvo:false,imagem_id:imagemSelecionada},geometry:{type:'Polygon',coordinates:[[...pontos,[...pontos[0]]]]}});
+        cancelar(); renderizar(); mensagem.textContent='Área criada. Salve com uma imagem vinculada para analisar.'; salvar();
     };
     el('exportar_poligonos').onclick=()=>{
         const blob=new Blob([JSON.stringify({type:'FeatureCollection',features:registros},null,2)],{type:'application/geo+json'});
@@ -146,5 +168,5 @@ function iniciarPoligonos(mapa, aoIniciar) {
     } catch (_) { mensagem.textContent='Não foi possível recuperar as áreas salvas neste navegador.'; }
     registros.forEach(f=>{ f.properties ||= {}; f.properties.id ||= crypto.randomUUID(); });
     renderizar(); salvar(); carregarServidor();
-    return {cancelar};
+    return {cancelar, definirImagem: id => { imagemSelecionada = id; }};
 }

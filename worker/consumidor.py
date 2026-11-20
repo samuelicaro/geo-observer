@@ -1,4 +1,4 @@
-"""Worker didático: recorta TIFFs; não executa inferência."""
+"""Worker: recorta TIFFs e executa cobertura do solo em CPU."""
 import json
 import logging
 import time
@@ -6,6 +6,9 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from worker.tiles import recortar
+from worker.inferencia import inferir
+from geoalchemy2.shape import from_shape
+from shapely.geometry import shape
 
 from dotenv import load_dotenv
 from sqlalchemy import select, func
@@ -13,7 +16,7 @@ from sqlalchemy.orm import Session
 from api.database import engine
 from api.raster import original_local
 from api.storage import storage
-from models.models import Tarefa, Processamento, Imagem
+from models.models import Tarefa, Processamento, Imagem, Poligono, EscopoProcessamento, OrigemImagem
 from worker.broker import conectar, QUEUE
 
 def executar(tarefa_id):
@@ -24,13 +27,19 @@ def executar(tarefa_id):
         tarefa.tentativas += 1
         processo = db.get(Processamento, tarefa.processamento_id)
         imagem = db.get(Imagem, processo.imagem_id)
+        origem = db.get(OrigemImagem, imagem.id)
         try:
             with original_local(imagem) as path, TemporaryDirectory() as directory:
                 output = Path(directory) / "tile.tif"
                 recortar(path, output, tarefa)
+                scope=db.get(EscopoProcessamento,processo.id)
+                predictions=inferir(output,scope.dados['geometria'] if scope else None,origem.dados if origem else None)
                 # Chave determinística: uma reentrega substitui o mesmo tile.
                 key = f"tiles/{processo.id}/{tarefa.id}.tif"
                 storage().fput_object(imagem.bucket, key, str(output), content_type="image/tiff")
+            for prediction in predictions:
+                db.add(Poligono(tarefa_id=tarefa.id,classe=prediction['classe'],confianca=prediction['confianca'],
+                    geometria=from_shape(shape(prediction['geometria']),srid=4326)))
             tarefa.status, tarefa.erro = "concluida", None
         except Exception as exc:
             logging.exception("Falha na tarefa %s", tarefa.id)
@@ -38,7 +47,7 @@ def executar(tarefa_id):
             tarefa.erro = type(exc).__name__
         db.flush()
         # Serializa somente a atualização do resumo, após o trabalho pesado.
-        processo = db.scalar(select(Processamento).where(Processamento.id == processo.id).with_for_update())
+        processo = db.scalar(select(Processamento).where(Processamento.id == processo.id).with_for_update(key_share=True))
         counts = dict(db.execute(select(Tarefa.status, func.count()).where(
             Tarefa.processamento_id == processo.id).group_by(Tarefa.status)).all())
         pendentes = counts.get("pendente", 0) + counts.get("processando", 0)

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from api.database import session
+from api.acesso import session
 from api.schemas import AreaCriacao, AreaLeitura
 from models.models import AreaInteresse, Imagem
 

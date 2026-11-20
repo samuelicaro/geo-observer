@@ -1,0 +1,28 @@
+# Ignorar ambiente local
+.env
+
+# Ignorar diarios
+api/diario
+
+# Ignorar Pycache
+api/__pycache__
+
+__pycache__/
+*.py[cod]
+
+.venv/
+
+work/
+
+.env.deploy
+.env.*.local
+secrets/
+*.pem
+*.key
+
+# Material local de documentação, apoio e testes, fora do commit da entrega.
+docs/
+scripts/
+tests/
+.github/
+output/

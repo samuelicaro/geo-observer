@@ -107,8 +107,39 @@ class OrigemImagem(Base):
 class AreaInteresse(Base):
     """Área escolhida pelo usuário; distinta dos resultados em Poligono."""
     __tablename__ = "areas_interesse"
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"), index=True)
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     nome: Mapped[str] = mapped_column(String(100))
     imagem_id: Mapped[int | None] = mapped_column(ForeignKey("imagens.id", ondelete="RESTRICT"), index=True)
     geometria: Mapped[WKBElement] = mapped_column(Geometry("POLYGON", srid=4326))
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+class SessaoUsuario(Base):
+    __tablename__ = "sessoes_usuarios"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), index=True)
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class IdentidadeGoogle(Base):
+    __tablename__ = "identidades_google"
+    sub: Mapped[str] = mapped_column(String(255), primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), unique=True)
+
+
+class DesafioGoogle(Base):
+    __tablename__ = "desafios_google"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    nonce_hash: Mapped[str] = mapped_column(String(64))
+    modo: Mapped[str] = mapped_column(String(10))
+    usuario_id: Mapped[int | None] = mapped_column(ForeignKey("usuarios.id"))
+    sessao_hash: Mapped[str | None] = mapped_column(String(64))
+    expira_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class EscopoProcessamento(Base):
+    """Cópia imutável da área no instante de criação; não depende da área editável."""
+    __tablename__ = 'escopos_processamentos'
+    processamento_id: Mapped[int] = mapped_column(ForeignKey('processamentos.id',ondelete='CASCADE'),primary_key=True)
+    dados: Mapped[dict] = mapped_column(JSONB)

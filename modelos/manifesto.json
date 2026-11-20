@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/PUTvision/qgis-plugin-deepness",
+  "revision": "905ac02affa45b229c45bf8bc0a082a3a7700d29",
+  "directory": "examples/deeplabv3_segmentation_landcover",
+  "files": {
+    "deeplabv3_landcover_4c.onnx": "3c82806dfe6a582ba26642427ef5533595981ec2bb6d4d3a3c4a3f06ac4753c4",
+    "N-33-60-D-c-4-2.tif": "6621bf251c3b511e05e01c20b72df9725cd0d6dcb108b8dfed7cc12a7f888525"
+  }
+}

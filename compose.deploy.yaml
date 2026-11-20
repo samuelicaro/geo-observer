@@ -1,0 +1,112 @@
+name: geo-observer-deploy
+x-app: &app
+  image: geo-observer-app:local
+  build: .
+  restart: unless-stopped
+  environment: &environment
+    DATABASE_URL: postgresql+psycopg://geo:${POSTGRES_PASSWORD:?Configure .env.deploy}@postgis:5432/geo_observer
+    MINIO_ENDPOINT: minio:9000
+    MINIO_ACCESS_KEY: geoobserver
+    MINIO_SECRET_KEY: ${MINIO_PASSWORD:?Configure .env.deploy}
+    MINIO_SECURE: "false"
+    MINIO_BUCKET: imagens
+    RABBITMQ_URL: amqp://geo:${RABBITMQ_PASSWORD:?Configure .env.deploy}@rabbitmq:5672/%2F
+    COOKIE_SECURE: ${COOKIE_SECURE:-false}
+    GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+    MAX_UPLOAD_BYTES: "314572800"
+    EE_PROJECT: ${EE_PROJECT:-}
+    EE_SERVICE_ACCOUNT_EMAIL: ${EE_SERVICE_ACCOUNT_EMAIL:-}
+    EE_SERVICE_ACCOUNT_FILE: ${EE_SERVICE_ACCOUNT_FILE:-}
+    API_ROOT_PATH: /api
+  depends_on:
+    inicializar:
+      condition: service_completed_successfully
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+services:
+  postgis:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: geo_observer
+      POSTGRES_USER: geo
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configure .env.deploy}
+    volumes: [postgis_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U geo -d geo_observer"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+  minio:
+    image: geo-observer-minio:local
+    build: {context: ., dockerfile: infra/minio.Dockerfile}
+    command: server /data --console-address :9001
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: geoobserver
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:?Configure .env.deploy}
+    volumes: [minio_data:/data]
+  rabbitmq:
+    image: rabbitmq:4-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: geo
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Configure .env.deploy}
+    volumes: [rabbitmq_data:/var/lib/rabbitmq]
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+  inicializar:
+    <<: *app
+    restart: "no"
+    command:
+      - python
+      - -c
+      - |
+        import time
+        from api.database import engine
+        from api.storage import bucket, storage
+        from models.models import Base
+        Base.metadata.create_all(engine())
+        client = storage()
+        for attempt in range(30):
+            try:
+                if not client.bucket_exists(bucket()):
+                    client.make_bucket(bucket())
+                break
+            except Exception:
+                if attempt == 29:
+                    raise
+                time.sleep(2)
+    depends_on:
+      postgis: {condition: service_healthy}
+      rabbitmq: {condition: service_healthy}
+      minio: {condition: service_started}
+  api:
+    <<: *app
+    volumes: ["./secrets/earthengine:/run/earthengine:ro"]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health',timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  publicador:
+    <<: *app
+    command: [python, -m, worker.publicador]
+  worker1:
+    <<: *app
+    command: [python, -m, worker.consumidor]
+  worker2:
+    <<: *app
+    command: [python, -m, worker.consumidor]
+  frontend:
+    build: {context: ., dockerfile: infra/frontend.Dockerfile}
+    restart: unless-stopped
+    ports: ["${HTTP_BIND:-127.0.0.1}:${HTTP_PORT:-8080}:80"]
+volumes:
+  postgis_data:
+  minio_data:
+  rabbitmq_data:

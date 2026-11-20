@@ -6,82 +6,183 @@
     <title>Geo Observer</title>
     <link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css"/>
     <style>
-        body { font-family: Arial, sans-serif; margin: 24px; max-width: 1000px; }
-        h1 { font-size: 26px; }
-        h2 { font-size: 19px; margin-top: 28px; }
-        button, input { font: inherit; }
-        button { margin: 3px; cursor: pointer; }
-        button:disabled { cursor: wait; }
-        li { margin-bottom: 10px; overflow-wrap: anywhere; }
-        #imagem_previa { max-width: 100%; height: auto; }
-        #status_imagens, #status_processamentos, #status_previa { font-size: 14px; }
-        hr { border: 0; border-top: 1px solid #aaa; margin: 24px 0; }
+        :root { color-scheme: light; --fundo:#f2f4f2; --papel:#fff; --texto:#252b27; --suave:#68726b; --borda:#d8ded9; --verde:#466550; --verde-escuro:#35513d; }
+        * { box-sizing:border-box; }
+        body { margin:0; background:var(--fundo); color:var(--texto); font:15px/1.45 Arial,sans-serif; }
+        .pagina { width:min(1120px,calc(100% - 32px)); margin:0 auto; padding:24px 0 48px; }
+        .topo { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:18px; }
+        h1 { margin:0; font-size:25px; letter-spacing:-.4px; }
+        .subtitulo { margin:3px 0 0; color:var(--suave); font-size:14px; }
+        h2 { margin:0; font-size:19px; letter-spacing:-.2px; }
+        h3 { margin:0; font-size:16px; }
+        .navegacao { display:flex; flex-wrap:wrap; gap:8px; margin:0 0 18px; }
+        .navegacao a { padding:7px 12px; border:1px solid var(--borda); border-radius:6px; background:#fff; color:var(--texto); text-decoration:none; font-size:14px; }
+        .navegacao a:hover { border-color:var(--verde); color:var(--verde-escuro); }
+        .painel { margin:0 0 16px; padding:20px; border:1px solid var(--borda); border-radius:8px; background:var(--papel); }
+        .cabecalho { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; margin-bottom:14px; }
+        .ajuda { margin:5px 0 0; color:var(--suave); font-size:14px; }
+        button, input { font:inherit; }
+        button { padding:7px 11px; border:1px solid #c7d0ca; border-radius:5px; background:#fff; color:var(--texto); cursor:pointer; }
+        button:hover:not(:disabled) { border-color:var(--verde); background:#f4f7f4; }
+        button:disabled { cursor:not-allowed; opacity:.55; }
+        .primario { border-color:var(--verde); background:var(--verde); color:#fff; }
+        button.primario:hover:not(:disabled) { border-color:var(--verde-escuro); background:var(--verde-escuro); color:#fff; }
+        #sair_conta { white-space:nowrap; }
+        #mapa { height:420px; border:1px solid var(--borda); border-radius:6px; }
+        .acoes-mapa,.acoes-poligono,.filtros,.linha-upload { display:flex; flex-wrap:wrap; align-items:end; gap:9px; margin-top:12px; }
+        fieldset { min-width:0; margin:16px 0 0; padding:14px; border:1px solid var(--borda); border-radius:6px; }
+        legend { padding:0 5px; font-weight:600; }
+        .acoes-poligono { margin-top:0; }
+        .filtros label,.campo-upload { display:grid; gap:4px; color:var(--suave); font-size:13px; }
+        input:not([type=hidden]) { min-height:36px; padding:6px 8px; border:1px solid #c7d0ca; border-radius:5px; background:#fff; color:var(--texto); }
+        input[type=number] { width:76px; }
+        #arquivo_tif { max-width:100%; }
+        .estado { min-height:1.2em; margin:10px 0 0; color:var(--suave); font-size:14px; }
+        .nota { margin:10px 0 0; color:var(--suave); font-size:13px; }
+        .lista { margin:12px 0 0; padding:0; list-style:none; }
+        .lista:empty { margin:0; }
+        .lista li { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:0; padding:10px 0; border-top:1px solid #e6eae7; overflow-wrap:anywhere; }
+        #lista_poligonos li { gap:6px; }
+        #mais_imagens { margin-top:8px; }
+        #imagem_previa { display:block; max-width:100%; max-height:70vh; margin-top:12px; border-radius:5px; }
+        #imagem_previa[hidden] { display:none; }
+        #visualizacao[hidden] { display:none; }
+        #status_imagens,#status_processamentos,#status_previa,#status_mapa,#status_poligonos { color:var(--suave); font-size:14px; }
+        .modelo { margin-top:14px; padding-top:12px; border-top:1px solid #e6eae7; color:var(--suave); font-size:13px; }
+        .modelo summary { width:max-content; cursor:pointer; color:var(--texto); }
+        .modelo p { max-width:850px; margin:8px 0 0; }
+        #acesso_google { margin:12px 0; }
+        @media (max-width:640px) {
+            .pagina { width:calc(100% - 20px); padding-top:14px; }
+            .painel { padding:14px; }
+            .cabecalho { display:block; }
+            #mapa { height:360px; }
+            .filtros label { flex:1 1 130px; }
+            .linha-upload { align-items:stretch; }
+        }
     </style>
 </head>
 <body>
-    <h1>Geo Observer</h1>
-    <p>Sistemas Distribuídos — upload e recorte de imagens</p>
-    <p><a href="/docs">API / Swagger</a></p>
-    <hr/>
-    <h2>Escolher no mapa</h2>
-    <p>Aproxime o mapa e clique em Selecionar área. Depois marque dois cantos do retângulo.</p>
-    <div id="mapa" style="height:420px; border:1px solid #aaa" aria-label="Mapa de seleção de área"></div>
-    <button id="selecionar_area" type="button">Selecionar área</button>
-    <button id="limpar_area" type="button">Limpar</button>
-    <fieldset>
-        <legend>Áreas para futura predição</legend>
-        <p>Clique em Desenhar, marque os vértices no mapa e conclua. Depois use Salvar no servidor para guardar a área. Vincule uma imagem pelo ID exibido na lista de arquivos. Ainda não há predição.</p>
-        <button id="desenhar_poligono" type="button">Desenhar polígono</button>
-        <button id="desfazer_vertice" type="button" disabled>Desfazer ponto</button>
-        <button id="concluir_poligono" type="button" disabled>Concluir</button>
-        <button id="cancelar_poligono" type="button" disabled>Cancelar desenho</button>
-        <button id="atualizar_areas" type="button">Atualizar áreas do servidor</button>
-        <button id="exportar_poligonos" type="button" disabled>Baixar GeoJSON</button>
-        <p id="status_poligonos" role="status" aria-live="polite"></p>
-        <ul id="lista_poligonos"></ul>
-    </fieldset>
-    <p id="area_mapa">Nenhuma área selecionada.</p>
-    <p>
-        <label>De <input type="date" id="data_inicio"/></label>
-        <label>até <input type="date" id="data_fim"/></label>
-        <label>Nuvens na cena até <input type="number" id="nuvens" value="30" min="0" max="100" style="width:60px"/>%</label>
-        <button id="buscar_cenas" type="button">Buscar cenas</button>
-    </p>
-    <p id="status_mapa" role="status" aria-live="polite"></p>
-    <ul id="cenas_mapa"></ul>
-    <button id="importar_cena" type="button" disabled>Adicionar cena aos arquivos</button>
-    <p>O mapa de ruas é só uma referência. A cena Sentinel-2 escolhida aparece por cima dele, com resolução de 10 m.</p>
-    <hr/>
-    <h2>Ou enviar seu arquivo</h2>
-    <label for="arquivo_tif">GeoTIFF (.tif ou .tiff):</label>
-    <input type="hidden" name="MAX_FILE_SIZE" value="314572800">
-    <input type="file" id="arquivo_tif" name="arquivo_tif" accept=".tif,.tiff"/>
-    <button type="button" id="enviar_tif">Enviar</button>
-    <p>Até 300 MB. O arquivo precisa ter coordenadas.</p>
+    <div class="pagina">
+        <header class="topo">
+            <div>
+                <h1>Geo Observer</h1>
+                <p class="subtitulo">Imagens geográficas e análise de cobertura do solo</p>
+            </div>
+            <button type="button" id="sair_conta">Sair da conta</button>
+        </header>
 
-    <h2>Arquivos</h2>
-    <button type="button" id="atualizar_imagens">Atualizar</button>
-    <p id="status_imagens" role="status" aria-live="polite"></p>
-    <ul id="lista_imagens"></ul>
-    <button type="button" id="mais_imagens" hidden>Ver mais</button>
+        <section id="acesso_google" hidden>
+            <button type="button" id="preparar_google">Vincular Google à minha conta</button>
+            <div id="botao_google"></div>
+            <p id="status_google" role="status"></p>
+        </section>
 
-    <section id="visualizacao" hidden>
-        <hr/>
-        <h2 id="titulo_previa">Imagem</h2>
-        <button type="button" id="fechar_previa">Fechar imagem</button>
-        <p id="status_previa" role="status" aria-live="polite"></p>
-        <img id="imagem_previa" alt="Imagem selecionada" hidden/>
-        <p>Prévia reduzida. As cores podem variar conforme as bandas do TIFF.</p>
-    </section>
-    <hr/>
-    <h2>Recortes</h2>
-    <p>O processamento atual só divide a imagem em partes. Ainda não faz detecção.</p>
-    <p id="status_processamentos" role="status"></p>
-    <ul id="lista_processamentos"></ul>
-    <script src="/static/upload.js" defer></script>
-    <script src="/static/vendor/leaflet/leaflet.js" defer></script>
-    <script src="/static/poligonos.js" defer></script>
-    <script src="/static/mapa.js" defer></script>
+        <nav class="navegacao" aria-label="Ir para">
+            <a href="#mapa_secao">Mapa</a>
+            <a href="#upload_secao">Enviar TIFF</a>
+            <a href="#imagens_secao">Arquivos</a>
+            <a href="#processamentos_secao">Resultados</a>
+        </nav>
+
+        <main>
+            <section class="painel" id="mapa_secao">
+                <div class="cabecalho">
+                    <div>
+                        <h2>Buscar cenas no mapa</h2>
+                        <p class="ajuda">Marque um retângulo ou use um polígono desenhado para buscar Sentinel-2.</p>
+                    </div>
+                </div>
+                <div id="mapa" aria-label="Mapa de seleção de área"></div>
+                <div class="acoes-mapa">
+                    <button id="selecionar_area" type="button">Selecionar retângulo</button>
+                    <button id="limpar_area" type="button">Limpar seleção</button>
+                </div>
+                <fieldset>
+                    <legend>Áreas desenhadas</legend>
+                    <p class="ajuda">Desenhe e salve um polígono para limitar uma análise. Para buscar cenas, use o botão na linha da área.</p>
+                    <div class="acoes-poligono">
+                        <button id="desenhar_poligono" type="button">Desenhar polígono</button>
+                        <button id="desfazer_vertice" type="button" disabled>Desfazer ponto</button>
+                        <button id="concluir_poligono" type="button" disabled>Concluir</button>
+                        <button id="cancelar_poligono" type="button" disabled>Cancelar desenho</button>
+                        <button id="atualizar_areas" type="button">Atualizar áreas</button>
+                        <button id="exportar_poligonos" type="button" disabled>Baixar GeoJSON</button>
+                    </div>
+                    <p id="status_poligonos" class="estado" role="status" aria-live="polite"></p>
+                    <ul id="lista_poligonos" class="lista"></ul>
+                </fieldset>
+                <p id="area_mapa" class="estado">Nenhuma área selecionada.</p>
+                <div class="filtros">
+                    <label>De <input type="date" id="data_inicio"/></label>
+                    <label>Até <input type="date" id="data_fim"/></label>
+                    <label>Nuvens até (%) <input type="number" id="nuvens" value="30" min="0" max="100"/></label>
+                    <button id="buscar_cenas" class="primario" type="button">Buscar cenas</button>
+                </div>
+                <p id="status_mapa" class="estado" role="status" aria-live="polite"></p>
+                <ul id="cenas_mapa" class="lista"></ul>
+                <button id="importar_cena" class="primario" type="button" disabled>Adicionar cena aos arquivos</button>
+                <p class="nota">Sentinel-2: resolução de 10 m por pixel.</p>
+            </section>
+
+            <section class="painel" id="upload_secao">
+                <div class="cabecalho">
+                    <div>
+                        <h2>Enviar uma imagem</h2>
+                        <p class="ajuda">GeoTIFF georreferenciado, até 300 MB.</p>
+                    </div>
+                    <a href="/amostra.tif" download="amostra-demonstracao.tif">Baixar amostra</a>
+                </div>
+                <div class="linha-upload">
+                    <input type="hidden" name="MAX_FILE_SIZE" value="314572800"/>
+                    <label class="campo-upload" for="arquivo_tif">Arquivo .tif ou .tiff
+                        <input type="file" id="arquivo_tif" name="arquivo_tif" accept=".tif,.tiff"/>
+                    </label>
+                    <button type="button" id="enviar_tif" class="primario">Enviar imagem</button>
+                </div>
+            </section>
+
+            <section class="painel" id="imagens_secao">
+                <div class="cabecalho">
+                    <div>
+                        <h2>Arquivos</h2>
+                        <p class="ajuda">Selecione uma imagem para visualizar, localizar ou processar.</p>
+                    </div>
+                    <button type="button" id="atualizar_imagens">Atualizar</button>
+                </div>
+                <p id="status_imagens" class="estado" role="status" aria-live="polite"></p>
+                <ul id="lista_imagens" class="lista"></ul>
+                <button type="button" id="mais_imagens" hidden>Ver mais</button>
+            </section>
+
+            <section id="visualizacao" class="painel" hidden>
+                <div class="cabecalho">
+                    <h2 id="titulo_previa">Imagem</h2>
+                    <button type="button" id="fechar_previa">Fechar</button>
+                </div>
+                <p id="status_previa" class="estado" role="status" aria-live="polite"></p>
+                <img id="imagem_previa" alt="Imagem selecionada" hidden/>
+                <p class="nota">Prévia reduzida; as cores podem variar conforme as bandas.</p>
+            </section>
+
+            <section class="painel" id="processamentos_secao">
+                <div class="cabecalho">
+                    <div>
+                        <h2>Resultados</h2>
+                        <p class="ajuda">Ao concluir, use “Ver cobertura no mapa”.</p>
+                    </div>
+                    <button id="limpar_resultados_mapa" type="button" disabled>Limpar mapa</button>
+                </div>
+                <p id="status_processamentos" class="estado" role="status"></p>
+                <ul id="lista_processamentos" class="lista"></ul>
+                <details class="modelo">
+                    <summary>Sobre o modelo de cobertura</summary>
+                    <p>Classes: edificações, vegetação arbórea, água e vias. O modelo usa RGB; cenas Sentinel-2 são convertidas das bandas B4/B3/B2 e têm 10 m/pixel. Os resultados são exploratórios, não servem para identificar veículos ou mudanças de desmatamento.</p>
+                </details>
+            </section>
+        </main>
+    </div>
+    <script src="/static/auth.js" defer></script>
+    <script src="/static/iniciar.js" defer></script>
 </body>
 </html>
-

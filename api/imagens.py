@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from pathlib import Path
@@ -5,13 +6,13 @@ from tempfile import SpooledTemporaryFile
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from starlette.concurrency import run_in_threadpool
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from api.database import session
+from api.acesso import session
 from api.storage import storage, bucket
 from models.models import Imagem, Processamento, OrigemImagem
-from api.schemas import ImagemLeitura
+from api.schemas import ImagemLeitura, ImagemRenomear
 from fastapi.responses import Response
 from api.previas import gerar_previa
 from api.raster import metadados
@@ -33,6 +34,15 @@ def obter(imagem_id: int, db: Session = Depends(session)):
         raise HTTPException(404, "Imagem não encontrada")
     return serialize(item)
 
+@router.patch("/{imagem_id}", response_model=ImagemLeitura)
+def renomear(imagem_id: int, body: ImagemRenomear, db: Session = Depends(session)):
+    item = db.get(Imagem, imagem_id)
+    if item is None:
+        raise HTTPException(404, "Imagem não encontrada")
+    item.nome_original = body.nome_original
+    db.commit()
+    return serialize(item)
+
 @router.delete("/{imagem_id}", response_model=ImagemLeitura)
 def remover(imagem_id: int, db: Session = Depends(session)):
     item = db.get(Imagem, imagem_id)
@@ -46,6 +56,7 @@ def remover(imagem_id: int, db: Session = Depends(session)):
         raise HTTPException(409, "A imagem possui processamentos vinculados e não pode ser removida.")
 
     resposta = ImagemLeitura.model_validate(item)
+    target, key = item.bucket, item.objeto_chave
     try:
         db.delete(item)
         db.commit()
@@ -53,8 +64,13 @@ def remover(imagem_id: int, db: Session = Depends(session)):
         db.rollback()
         # Também cobre um processamento criado entre a consulta e a exclusão.
         if getattr(exc.orig, "sqlstate", None) in {"23001", "23502", "23503"}:
-            raise HTTPException(409, "A imagem possui registros vinculados e não pode ser removida.") from None
+            raise HTTPException(409, "A imagem está vinculada a uma área ou análise e não pode ser excluída.") from None
         raise
+    try:
+        storage().remove_object(target, key)
+    except Exception:
+        # A linha já foi excluída; registrar o objeto órfão para limpeza operacional.
+        logger.exception("Objeto MinIO órfão após excluir imagem %s: %s/%s", imagem_id, target, key)
     return resposta
 
 def persistir(file, nome, size, db, origem=None):
@@ -113,3 +129,26 @@ def origem(imagem_id: int, db: Session = Depends(session)):
         raise HTTPException(404, 'Imagem não encontrada')
     row = db.get(OrigemImagem, imagem_id)
     return row.dados if row else {'provedor': 'upload local ou registro anterior'}
+
+
+@router.get('/{imagem_id}/extensao')
+def extensao(imagem_id: int, db: Session = Depends(session)):
+    item = db.get(Imagem, imagem_id)
+    if item is None:
+        raise HTTPException(404, 'Imagem não encontrada')
+    if item.area_coberta is None:
+        raise HTTPException(422, 'Imagem sem extensão geográfica cadastrada.')
+    geometry = json.loads(db.scalar(select(func.ST_AsGeoJSON(item.area_coberta, 15))))
+    return {'type': 'Feature', 'properties': {'imagem_id': item.id,
+            'nome': item.nome_original, 'tipo': 'extensao_cadastrada'}, 'geometry': geometry}
+
+
+@router.get('/{imagem_id}/previa-mapa')
+def previa_mapa(imagem_id: int, db: Session = Depends(session)):
+    import base64
+    item = db.get(Imagem, imagem_id)
+    if item is None:
+        raise HTTPException(404, 'Imagem não encontrada')
+    png, bounds = gerar_previa(item, mapa=True)
+    return {'imagem_id':item.id, 'bounds':bounds,
+            'imagem_url':'data:image/png;base64,'+base64.b64encode(png).decode('ascii')}

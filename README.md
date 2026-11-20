@@ -1,60 +1,83 @@
-# geo-observer (Rascunho inicial)
-Trabalho desenvolvido na disciplina de Sistemas Distribuídos da faculdade.
+# Geo Observer
 
-## Ideia geral
+Plataforma web para enviar imagens GeoTIFF, desenhar áreas de interesse e executar inferência geográfica distribuída. A API planeja recortes; um publicador envia referências de tarefas pelo RabbitMQ; dois workers processam os recortes e gravam resultados no PostGIS. O mapa apresenta as classes previstas.
 
-O objetivo do projeto é construir um sistema distribuído capaz de processar imagens de satélite (arquivos `.tif`) para identificar objetos/padrões usando visão computacional e exibir os resultados em um mapa web conforme o processamento avança.
+> **Demonstração publicada:** [Geo Observer](https://geo-observer.18.219.115.228.sslip.io) · [Documentação da API](https://geo-observer.18.219.115.228.sslip.io/api/docs)
+>
+> A instância está na AWS e usa um endereço provisório `sslip.io`, associado ao IP atual. Pode haver consumo de créditos/custos da conta. Imagens, contas e resultados locais não são migrados para a demonstração.
 
-Como imagens de satélite costumam ser muito grandes e pesadas para processar de uma vez só em um único processo, a ideia central para aplicar os conceitos da disciplina é recortar a imagem original em blocos menores (*tiles*) e distribuir esses pedaços entre múltiplos nós de processamento (*workers*). Conforme cada *worker* termina seu pedaço, o front-end vai atualizando o mapa em tempo real.
+## O que o sistema faz
 
-## Fluxo básico até agora
+- Cadastro e login por senha, com opção de login Google na instância publicada.
+- Upload, lista, prévia, localização, renomeação e exclusão protegida de GeoTIFF.
+- Busca opcional de cenas Sentinel-2 pelo Google Earth Engine.
+- Desenho de áreas de interesse no mapa e análises limitadas ao polígono.
+- Planejamento de tarefas, processamento em dois workers e acompanhamento de progresso.
+- Visualização e limpeza da camada de inferência no mapa.
 
-1. **Interface Web:** O usuário seleciona uma área no mapa (ou envia um arquivo `.tif` de teste) para análise.
-2. **API Backend:** Recebe a requisição, guarda o arquivo `.tif` bruto em um armazenamento separado (para não trafegar arquivos grandes pela rede/fila) e divide o trabalho em tarefas menores.
-3. **Middleware (Fila de Mensagens):** Recebe apenas as referências (links/coordenadas de cada recorte) e distribui para os *workers* disponíveis.
-4. **Workers de Processamento:** Cada instância puxa o pedaço correspondente da imagem, roda a predição do modelo e salva os polígonos encontrados no banco de dados.
-5. **Retorno para o Usuário:** Um serviço de cache/notificação avisa a API à medida que os pedaços ficam prontos, atualizando a tela do usuário (provavelmente via WebSocket).
+## Arquitetura atual
 
-## Stack inicial
+O frontend é HTML, CSS e JavaScript servido por Nginx em um container próprio. Ele conversa com a API FastAPI por HTTP. O projeto não usa React, Redis ou WebSocket: o progresso é consultado periodicamente pela API, e o estado fica no PostgreSQL/PostGIS.
 
-* **Backend / API:** Python (FastAPI)
-* **Armazenamento de Arquivos:** MinIO (para salvar os `.tif` brutos fora do banco relacional)
-* **Banco de Dados:** PostgreSQL com extensão PostGIS (para lidar com os metadados geográficos e polígonos gerados)
-* **Cache / Estado:** Redis (para controle rápido do progresso das tarefas)
-* **Ambiente:** Docker (ideal para simular serviços em paralelo)
-* **Interface Web:** React ou algo parecido
+RabbitMQ distribui IDs de tarefas. A API registra tarefa e outbox na mesma transação; o publicador entrega mensagens persistentes com confirmação; workers separados recebem e confirmam após concluir a transação. MinIO guarda os arquivos e recortes. O Docker Compose descreve cada serviço em um container próprio; não é um único container com toda a stack. Em HTTPS, Caddy é acrescentado pelo arquivo Compose opcional.
 
-## Pontos em aberto
+O modelo ONNX incluído é um exemplo pré-treinado de cobertura do solo, não foi treinado neste trabalho e não é um detector de veículos ou de mudanças de desmatamento. Cenas Sentinel-2 têm 10 m/pixel e os resultados são exploratórios.
 
-Como ainda estou estruturando a base da arquitetura, existem algumas escolhas técnicas que estou avaliando se valem a pena para o escopo do trabalho:
+## Executar a stack completa localmente
 
-1. **RabbitMQ vs. Redis puro no Middleware:** A ideia principal é usar o **RabbitMQ** para gerenciar a fila de tarefas e lidar com reenvio caso algum *worker* caia no meio do processamento. A dúvida é se o RabbitMQ adiciona muita complexidade de configuração junto com o Redis ou se é melhor manter os dois separados mesmo para deixar o papel do *broker* bem definido.
-2. **Uso do ONNX nos Workers:** Para rodar vários containers de *worker* na mesma máquina de teste sem estourar a memória RAM, pensei em exportar o modelo de visão computacional para o formato **ONNX** (usando `onnxruntime`) em vez de subir o PyTorch completo em cada container. Ainda preciso testar se isso complica a etapa de pós-processamento das coordenadas geográficas.
-3. **Integração com API do Google Earth / Autenticação:** No desenho inicial, pensei em buscar os arquivos `.tif` direto da API do Google Earth Engine e colocar login com conta Google. Porém, dependendo do tempo disponível, estou considerando deixar essa integração externa como opcional e focar primeiro no upload direto de arquivos `.tif` locais para priorizar os requisitos de sistemas distribuídos (concorrência, tolerância a falhas e comunicação entre os nós).
+Requisitos: Git, Docker Desktop com Compose e conexão à internet para baixar as imagens e construir o container MinIO.
 
-## Estrutura de Pastas (objetivo final)
-- geo-observer
-  - api
-    - app: API FastAPI e ingestão.
-  - worker
-    - app: Consumidores e inferência.
-  - database
-    - init: Schema SQL inicial.
-  - frontend
-    - src: Interface do mapa.
-  - testes
-    - unit: Testes Unitários.
-    - integration: Testes entre serviços.
-    - chaos: Testes de falhas.
-  - modelos
-    - onnx: Modelos de IA.
-  - infra
-    - rabbitmq: Configurações do broker.
-    - minio: Configurações do storage.
-    - postgis: Configurações espaciais.
+```bash
+git clone https://github.com/samuelicaro/geo-observer.git
+cd geo-observer
+cp .env.deploy.example .env.deploy
+docker compose --env-file .env.deploy -f compose.deploy.yaml up -d --build
+```
 
-## Próximos Passos
+Antes de iniciar, abra `.env.deploy` e defina senhas fortes e diferentes para `POSTGRES_PASSWORD`, `MINIO_PASSWORD` e `RABBITMQ_PASSWORD`. O arquivo contém credenciais locais e não deve ser enviado ao Git.
 
-- [ ] Fechar a definição final das ferramentas após validação da proposta.
-- [ ] Montar o `docker-compose.yml` básico com o banco e a fila.
-- [ ] Testar o recorte de uma imagem `.tif` pequena enviando tarefas simples para 2 *workers*.
+Abra [http://localhost:8080](http://localhost:8080). O Compose inicia PostGIS, MinIO, RabbitMQ, API, frontend, inicializador do banco/bucket, publicador e dois workers. A primeira compilação do MinIO pode levar alguns minutos. Os serviços de infraestrutura não publicam portas no host; a interface encaminha `/api` para a API pela rede interna do Compose.
+
+Verificar estado e logs:
+
+```bash
+docker compose --env-file .env.deploy -f compose.deploy.yaml ps
+docker compose --env-file .env.deploy -f compose.deploy.yaml logs -f api publicador worker1 worker2
+```
+
+Para parar mantendo os volumes de dados, execute `docker compose --env-file .env.deploy -f compose.deploy.yaml down`. **Não acrescente `-v`** se quiser manter banco, objetos e mensagens.
+
+O login Google e o Earth Engine são opcionais em uma instalação local. Configure `GOOGLE_CLIENT_ID` e as credenciais do Earth Engine apenas se for usar esses recursos.
+
+### HTTPS em uma máquina com domínio
+
+Aponte um domínio seu para o IP público, libere TCP 80/443, configure `SITE_ADDRESS` com o nome DNS e `COOKIE_SECURE=true` em `.env.deploy`; então inicie também o Caddy:
+
+```bash
+docker compose --env-file .env.deploy -f compose.deploy.yaml -f compose.https.yaml up -d --build
+```
+
+Caddy obtém e renova o certificado TLS quando o DNS e as portas estão configurados. A demonstração pública atual usa essa configuração HTTPS.
+
+## Containers e Docker Compose
+
+O projeto não é um único container. `compose.deploy.yaml` inicia containers separados para a interface, API, PostgreSQL/PostGIS, MinIO, RabbitMQ, publicador e dois workers. Cada parte pode ser iniciada e escalada separadamente. `compose.https.yaml` adiciona o Caddy para HTTPS quando há um domínio configurado.
+
+## Estrutura principal
+
+```text
+api/            rotas FastAPI, autenticação, Earth Engine e acesso aos serviços
+models/         todos os modelos ORM SQLAlchemy
+worker/         publicador da outbox, consumidores, recorte e inferência ONNX
+static/         frontend independente, mapa e recursos do navegador
+modelos/        modelo ONNX, manifesto, licença e TIFF de demonstração
+infra/          Nginx, Caddy e imagens de infraestrutura
+compose.deploy.yaml  stack completa
+compose.https.yaml   camada HTTPS opcional com Caddy
+```
+
+## Estado e limitações
+
+A stack foi construída e executada em uma VM AWS; os artefatos locais mais recentes ainda precisam ser enviados ao GitHub para o repositório remoto refletir o trabalho. A autenticação Google está configurada no servidor, mas o fluxo de popup ainda precisa ser confirmado com uma entrada real pelo navegador.
+
+Uma única VM é ponto único de falha e compartilha CPU/RAM entre os containers. O modelo não tem avaliação formal em imagens brasileiras; não use as previsões como decisão operacional. Earth Engine acessa a coleção Sentinel-2, não o Google Satellite/QuickMap de alta resolução. Consulte as limitações e os custos atuais do provedor antes de manter a VM ligada.

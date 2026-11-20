@@ -26,9 +26,29 @@ class ImagemLeitura(Leitura):
     crs: str | None = None
 
 
+class ImagemRenomear(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    nome_original: str = Field(min_length=5, max_length=255)
+
+    @field_validator("nome_original")
+    @classmethod
+    def validar_nome_tiff(cls, value: str) -> str:
+        if (
+            not value
+            or any(ord(caractere) < 32 for caractere in value)
+            or "/" in value
+            or "\\" in value
+            or value in {".", ".."}
+            or not value.lower().endswith((".tif", ".tiff"))
+        ):
+            raise ValueError("Use um nome simples terminado em .tif ou .tiff.")
+        return value
+
+
 class ProcessamentoCriacao(BaseModel):
     model_config = ConfigDict(extra="forbid")
     imagem_id: int = Field(gt=0)
+    area_id: UUID | None = None
 
 
 class ProcessamentoLeitura(Leitura):

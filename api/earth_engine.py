@@ -2,18 +2,21 @@
 from datetime import date, timedelta
 from functools import lru_cache
 import os
+import logging
 from tempfile import SpooledTemporaryFile
 from urllib.request import urlopen
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy.orm import Session
-from api.database import session
+from api.acesso import session
 from api.imagens import persistir
 from api.schemas import ImagemLeitura
 
 COLLECTION = "COPERNICUS/S2_SR_HARMONIZED"
 BANDS = ["B4", "B3", "B2", "B8"]
-router = APIRouter(prefix="/satelite", tags=["Satélite"])
+from api.auth import usuario_atual
+router = APIRouter(prefix="/satelite", tags=["Satélite"], dependencies=[Depends(usuario_atual)])
+logger = logging.getLogger(__name__)
 
 class Area(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
@@ -56,18 +59,22 @@ class Cena(BaseModel):
 def cliente():
     project = os.environ.get("EE_PROJECT")
     if not project:
-        raise HTTPException(503, "Configure EE_PROJECT e autentique o Earth Engine no servidor.")
+        raise HTTPException(503, "Busca por cenas temporariamente indisponível.")
     import ee
     try:
         key = os.environ.get("EE_SERVICE_ACCOUNT_FILE")
-        if key:
-            ee.Initialize(ee.ServiceAccountCredentials(os.environ["EE_SERVICE_ACCOUNT_EMAIL"], key), project=project)
+        email = os.environ.get("EE_SERVICE_ACCOUNT_EMAIL")
+        if bool(key) != bool(email):
+            raise ValueError("Earth Engine service account configuration is incomplete")
+        if key and email:
+            ee.Initialize(ee.ServiceAccountCredentials(email, key), project=project)
         else:
             ee.Initialize(project=project)
         ee.data.setDeadline(60000)
         return ee
     except Exception as exc:
-        raise HTTPException(503, "Earth Engine não autenticado ou projeto sem acesso. Confira a configuração local.") from exc
+        logger.exception("Falha ao inicializar o Earth Engine")
+        raise HTTPException(503, "Busca por cenas temporariamente indisponível.") from exc
 
 def geometria(ee, area):
     return ee.Geometry.Rectangle(area.coords(), proj="EPSG:4326", geodesic=False)
@@ -102,6 +109,7 @@ def buscar(body: Busca):
                  "nuvens":f["properties"].get("CLOUDY_PIXEL_PERCENTAGE"), "resolucao_m":10}
                 for f in info.get("features",[])]
     except Exception as exc:
+        logger.exception("Falha ao consultar cenas no Earth Engine")
         raise HTTPException(502, "Falha na busca do Earth Engine. Confira acesso e tente novamente.") from exc
 
 @router.post("/previa")
@@ -142,4 +150,3 @@ def importar(body: Cena, db: Session = Depends(session)):
     except Exception as exc:
         db.rollback()
         raise HTTPException(502,"Falha ao importar cena. Confira a lista de imagens antes de repetir.") from exc
-
